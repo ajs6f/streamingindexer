@@ -1,5 +1,7 @@
 package edu.virginia.lib.stanbol.streamingindexer
 
+import language.postfixOps
+
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object CLIUtils extends LazyLogging {
@@ -18,7 +20,7 @@ object CLIUtils extends LazyLogging {
 
       // Required/positional arguments
       case value :: tail if required nonEmpty => {
-        logger debug ("Found positional argument {} with value", required.head, value)
+        logger debug ("Found positional argument {} with value {}", required.head, value)
         parseOptions(tail, required tail, optional, options ++ Map(required.head -> value))
       }
 
