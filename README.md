@@ -1,0 +1,1 @@
+A "strawman" effort at a streaming indexer for the Apache Stanbol EntityHub, developing Apache Solr indexes from a sorted N-Triples file. See [STANBOL-1125](https://issues.apache.org/jira/browse/STANBOL-1125) for motivation. 
