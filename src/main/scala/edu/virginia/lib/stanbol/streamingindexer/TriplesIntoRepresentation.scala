@@ -26,7 +26,7 @@ class TriplesIntoRepresentation(val rep: Representation) extends LazyLogging {
           if (lang nonEmpty) {
             rep addNaturalText (pred, lexical, lang)
           }
-          rep.add(pred, lexical)
+          rep add(pred, lexical)
         } else {
           if (o isURIResource) {
             rep addReference (pred, o.asResource().getURI)

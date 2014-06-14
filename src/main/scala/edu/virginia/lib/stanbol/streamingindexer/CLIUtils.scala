@@ -6,22 +6,30 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object CLIUtils extends LazyLogging {
 
-  def parseOptions(args: List[String], required: List[Symbol], optional: Map[String, Symbol], options: Map[Symbol, String]): Map[Symbol, String] = {
+  def parseOptions(args: List[String], positional: List[Symbol], optional: Map[String, Symbol], options: Map[Symbol, String], required: Set[Symbol] = Set.empty): Map[Symbol, String] = {
     args match {
 
       // Empty list
-      case Nil => options
+      case Nil => {
+        if (required forall (options.keySet contains (_))) {
+          options
+        } else {
+          val ps = required diff (options keySet)
+          logger error ("Missing required parameters: {}!", ps mkString (", "))
+          sys exit (1)
+        }
+      }
 
       // Optional flags
       case key :: tail if optional isDefinedAt (key) => {
         logger debug ("Found parameter {}", key)
-        parseOptions(tail, required, optional, options ++ Map(optional(key) -> ""))
+        parseOptions(tail, positional, optional, options ++ Map(optional(key) -> ""), required)
       }
 
       // Required/positional arguments
-      case value :: tail if required nonEmpty => {
-        logger debug ("Found positional argument {} with value {}", required.head, value)
-        parseOptions(tail, required tail, optional, options ++ Map(required.head -> value))
+      case value :: tail if positional nonEmpty => {
+        logger debug ("Found positional argument {} with value {}", positional head, value)
+        parseOptions(tail, positional tail, optional, options ++ Map(positional.head -> value), required)
       }
 
       // Fail if an unknown argument is received

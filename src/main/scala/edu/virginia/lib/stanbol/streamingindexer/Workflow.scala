@@ -8,7 +8,7 @@ import actors.threadpool.Executors.newFixedThreadPool
 import actors.threadpool.TimeUnit.DAYS
 import collection.immutable.Map.empty
 import io.Source.{fromFile, fromInputStream}
-import language.{implicitConversions, postfixOps}
+import language.{implicitConversions, postfixOps, reflectiveCalls}
 import util.{Failure, Success, Try}
 
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer
@@ -50,32 +50,27 @@ object Workflow extends LazyLogging {
 
     yard = createYard(options get ('yardName))
 
-    val source = options get ('inputFile) match {
-      case None => {
-        logger error ("Input filename required!")
-        sys exit (1)
-      }
-      case Some(filename) => options get ('zipped) match {
-        case None => fromFile(new File(filename))
-        case some => fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(filename))))
-      }
-    }
+    val filename = options('inputFile)
 
-    val rdf = chunkingIterator(source getLines)(sameSubjects)
-    rdf foreach { triples =>
-      threadpool submit (
-        new Runnable {
-          override def run {
-            val subject = triples(0).split("\\s+")(0)
-            Try(createResource(subject)) match {
-              case Success(s) => {
-                logger info ("Processing RDF for: {}", s)
-                processEntity(subject, triples)
+    tryWith(options get ('zipped) match {
+      case None => fromFile(new File(filename))
+      case some => fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(filename))))
+    }) { source =>
+      chunkingIterator(source getLines)(sameSubjects) foreach { triples =>
+        threadpool submit (
+          new Runnable {
+            override def run {
+              val subject = triples(0).split("\\s+")(0)
+              Try(createResource(subject)) match {
+                case Success(s) => {
+                  logger info ("Processing RDF for: {}", s)
+                  processEntity(subject, triples)
+                }
+                case Failure(e) => logger error ("Failed to parse RDF subject: {}!\n{}", subject, e)
               }
-              case Failure(e) => logger error ("Failed to parse RDF subject: {}!\n{}", subject, e)
             }
-          }
-        })
+          })
+      }
     }
     threadpool.shutdown
     threadpool awaitTermination (3, DAYS)
@@ -105,27 +100,29 @@ object Workflow extends LazyLogging {
    */
   implicit def triples2model(triples: Seq[String]): Model = {
     val r = new StringReader(triples mkString ("\n"))
-    try { createDefaultModel read (r, "", "N3") }
-    finally { r close }
+    tryWith(new StringReader(triples mkString ("\n"))) {
+      createDefaultModel read (_, "", "N3")
+    }
+
   }
 
   /**
    * @return a configured {@link SolrYard}
    */
-  // TODO actual configuration
+  // TODO real configurability
   def createYard(yardName: Option[String]): SolrYard = {
     val solrHome = "target/classes/solr"
     val container =
       createAndLoad(solrHome, new File(solrHome, "solr.xml"))
-    val config = yardName match {
-      case None => new SolrYardConfig(defaultYardName, "imaginarySolrUrl")
-      case Some(y) =>
-        new SolrYardConfig(y, "imaginarySolrUrl")
-    }
+    val config = new SolrYardConfig(yardName getOrElse (defaultYardName), "imaginarySolrUrl")
     config setImmediateCommit (true)
     val server = new EmbeddedSolrServer(container, "testCore")
     server commit ()
     new SolrYard(server, config, new StanbolNamespacePrefixService(null))
+  }
+
+  def tryWith[T <: { def close() }, R](t: T)(f: T => R): R = {
+    try f(t) finally t close
   }
 
 }
