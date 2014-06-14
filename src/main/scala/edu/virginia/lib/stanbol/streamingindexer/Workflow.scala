@@ -1,20 +1,20 @@
 package edu.virginia.lib.stanbol.streamingindexer
 
-import java.io.{BufferedInputStream, File, FileInputStream, StringReader}
+import java.io.{ BufferedInputStream, File, FileInputStream, StringReader }
 import java.lang.Runtime.getRuntime
 import java.util.zip.GZIPInputStream
 
 import actors.threadpool.Executors.newFixedThreadPool
 import actors.threadpool.TimeUnit.DAYS
 import collection.immutable.Map.empty
-import io.Source.{fromFile, fromInputStream}
-import language.{implicitConversions, postfixOps, reflectiveCalls}
-import util.{Failure, Success, Try}
+import io.Source.{ fromFile, fromInputStream }
+import language.{ implicitConversions, postfixOps, reflectiveCalls }
+import util.{ Failure, Success, Try }
 
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer
 import org.apache.solr.core.CoreContainer.createAndLoad
 import org.apache.stanbol.commons.namespaceprefix.service.StanbolNamespacePrefixService
-import org.apache.stanbol.entityhub.yard.solr.impl.{SolrYard, SolrYardConfig}
+import org.apache.stanbol.entityhub.yard.solr.impl.{ SolrYard, SolrYardConfig }
 
 import com.hp.hpl.jena.rdf.model.Model
 import com.hp.hpl.jena.rdf.model.ModelFactory.createDefaultModel
@@ -30,10 +30,6 @@ import edu.virginia.lib.stanbol.streamingindexer.TriplesIntoRepresentation.tripl
  */
 object Workflow extends LazyLogging {
 
-  val defaultYardName = "testYard"
-
-  var yard: SolrYard = null
-
   val threadpool = newFixedThreadPool(getRuntime availableProcessors)
 
   /**
@@ -46,39 +42,40 @@ object Workflow extends LazyLogging {
 
     val required = List('inputFile)
     val optional = Map("--yardName" -> 'yardName, "--zipped" -> 'zipped)
-    val options = parseOptions(args toList, required, optional, empty[Symbol, String])
-
-    yard = createYard(options get ('yardName))
+    val options =
+      parseOptions(args toList, required, optional, empty, required toSet)
 
     val filename = options('inputFile)
+    val yardName = options get ('yardName)
 
-    tryWith(options get ('zipped) match {
-      case None => fromFile(new File(filename))
-      case some => fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(filename))))
-    }) { source =>
-      chunkingIterator(source getLines)(sameSubjects) foreach { triples =>
-        threadpool submit (
-          new Runnable {
-            override def run {
-              val subject = triples(0).split("\\s+")(0)
-              Try(createResource(subject)) match {
-                case Success(s) => {
-                  logger info ("Processing RDF for: {}", s)
-                  processEntity(subject, triples)
+    tryWith(createYard(yardName)) { yard =>
+      tryWith(options get ('zipped) match {
+        case None => fromFile(new File(filename))
+        case some => fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(filename))))
+      }) { source =>
+        chunkingIterator(source getLines)(sameSubjects) foreach { triples =>
+          threadpool submit (
+            new Runnable {
+              override def run {
+                val subject = triples(0).split("\\s+")(0)
+                Try(createResource(subject)) match {
+                  case Success(s) => {
+                    logger info ("Processing RDF for: {}", s)
+                    processEntity(subject, triples, yard)
+                  }
+                  case Failure(e) => logger error ("Failed to parse RDF subject: {}!\n{}", subject, e)
                 }
-                case Failure(e) => logger error ("Failed to parse RDF subject: {}!\n{}", subject, e)
               }
-            }
-          })
+            })
+        }
       }
     }
     threadpool.shutdown
     threadpool awaitTermination (3, DAYS)
-    yard.close
     sys exit (0)
   }
 
-  def processEntity(subject: String, triples: Seq[String]) {
+  def processEntity(subject: String, triples: Seq[String], yard: SolrYard) {
     if (yard isRepresentation (subject)) {
       val rep = yard getRepresentation (subject)
       logger debug ("Retrieved extant representation: {}", rep)
@@ -114,7 +111,7 @@ object Workflow extends LazyLogging {
     val solrHome = "target/classes/solr"
     val container =
       createAndLoad(solrHome, new File(solrHome, "solr.xml"))
-    val config = new SolrYardConfig(yardName getOrElse (defaultYardName), "imaginarySolrUrl")
+    val config = new SolrYardConfig(yardName getOrElse ("defaultYardName"), "imaginarySolrUrl")
     config setImmediateCommit (true)
     val server = new EmbeddedSolrServer(container, "testCore")
     server commit ()
