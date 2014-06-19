@@ -1,19 +1,14 @@
 package edu.virginia.lib.stanbol.streamingindexer
 
-import scala.util.matching.Regex
-
 import org.junit.runner.RunWith
-import org.specs2.mutable._
-import org.specs2.runner._
-import org.specs2.specification.Scope
-import scala.util.matching.Regex
+import org.specs2.mutable.Specification
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-@RunWith(classOf[JUnitRunner])
+@RunWith(classOf[org.specs2.runner.JUnitRunner])
 class ChunkingIteratorTest extends Specification with LazyLogging {
 
-  "Tests for the ChunkingIterator class".title
+  "Tests for the ChunkingIterator class" title
 
   isolated
 
@@ -24,7 +19,7 @@ class ChunkingIteratorTest extends Specification with LazyLogging {
     a.split("\\s+")(0) equals b.split("\\s+")(0)
   }
 
-  val testIterator = new ChunkingIterator(testData iterator)(testEquivalence)
+  val testIterator = ChunkingIterator.chunkingIterator(testData iterator)(testEquivalence)
 
   "The test iterator" should {
     "have an appropriate first chunk" in {

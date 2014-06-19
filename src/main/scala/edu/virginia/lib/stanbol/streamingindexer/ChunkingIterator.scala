@@ -21,7 +21,7 @@ class ChunkingIterator[T](var wrapped: Iterator[T])(equivalence: (T, T) => Boole
   override def next = {
     val (firstPath, secondPath) = wrapped duplicate
     val head = firstPath next;
-    logger trace ("Head of chunk: {}", head.asInstanceOf[AnyRef])
+    logger trace ("Head of chunk: {}", head toString)
     val tail = firstPath takeWhile (equivalence(head, _))
     wrapped = secondPath dropWhile (equivalence(head, _))
     head +: tail.toSeq
