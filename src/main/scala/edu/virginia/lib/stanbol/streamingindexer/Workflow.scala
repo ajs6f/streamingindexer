@@ -1,20 +1,21 @@
 package edu.virginia.lib.stanbol.streamingindexer
 
-import java.io.{ BufferedInputStream, File, FileInputStream, StringReader }
-import java.util.concurrent.Executors
+import java.io.{BufferedInputStream, File, FileInputStream, StringReader}
+import java.lang.Runtime.getRuntime
+import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit.DAYS
 import java.util.zip.GZIPInputStream
 
 import collection.immutable.Map.empty
-import concurrent.{ ExecutionContext, Future }
-import io.Source.{ fromFile, fromInputStream }
-import language.{ implicitConversions, postfixOps, reflectiveCalls }
-import util.{ Failure, Success }
+import concurrent.ExecutionContext.fromExecutorService
+import concurrent.Future
+import io.Source.{fromFile, fromInputStream}
+import language.{implicitConversions, postfixOps, reflectiveCalls}
 
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer
 import org.apache.solr.core.CoreContainer.createAndLoad
 import org.apache.stanbol.commons.namespaceprefix.service.StanbolNamespacePrefixService
-import org.apache.stanbol.entityhub.yard.solr.impl.{ SolrYard, SolrYardConfig }
+import org.apache.stanbol.entityhub.yard.solr.impl.{SolrYard, SolrYardConfig}
 
 import com.hp.hpl.jena.rdf.model.Model
 import com.hp.hpl.jena.rdf.model.ModelFactory.createDefaultModel
@@ -35,7 +36,7 @@ object Workflow extends LazyLogging {
   val sameSubjects: (String, String) => Boolean = (a, b) =>
     a.split("\\s+")(0) equals b.split("\\s+")(0)
 
-  implicit val threadpool = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()))
+  implicit val threadpool = fromExecutorService(newFixedThreadPool(getRuntime availableProcessors))
 
   def main(args: Array[String]): Unit = {
 
